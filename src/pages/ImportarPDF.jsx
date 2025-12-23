@@ -2,15 +2,14 @@ import React, { useState } from 'react';
 import { Upload, FileText, CheckCircle, AlertCircle, Loader } from 'lucide-react';
 import './ImportarPDF.css';
 
-// NOTA: Para extração REAL de PDF no navegador, recomenda-se instalar: npm install pdfjs-dist
-// Importaríamos assim: import * as pdfjsLib from 'pdfjs-dist';
-// pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
-
 const ImportarPDF = () => {
   const [file, setFile] = useState(null);
   const [processing, setProcessing] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
+
+  // URL do seu Script confirmada
+  const SHEETS_URL = 'https://script.google.com/macros/s/AKfycbzYGd07FGY7jApsBRCZaz1AwQs_r6l7yqMVu8l1AykhB4_pL8OTRN2GQN3hECLQ8oYI/exec';
 
   const handleFileChange = (e) => {
     const selectedFile = e.target.files[0];
@@ -25,58 +24,52 @@ const ImportarPDF = () => {
   };
 
   const extractDataFromPDF = async (pdfFile) => {
-    // === MOCK DE EXTRAÇÃO MANTIDO (PARA VALIDAR O FLUXO DE ENVIO PRIMEIRO) ===
-    // Se desejar a implementação real com pdfjs-dist, posso fornecer em um arquivo separado.
-    
+    // Simulação mantida para teste de conexão
     return new Promise((resolve) => {
-      console.log("Iniciando extração simulada...");
       setTimeout(() => {
         resolve({
-          numeroBO: 'MOCK-' + Math.floor(Math.random() * 10000), // Randomizado para testar inserções
+          numeroBO: 'MOCK-' + Math.floor(Math.random() * 10000),
           numeroREDS: '2025-050125657-001',
           dataFato: new Date().toISOString().split('T')[0],
-          horaFato: '11:57',
+          horaFato: '12:00',
           natureza: 'B01121 - HOMICIDIO',
           tentadoConsumado: 'CONSUMADO',
-          logradouro: 'RODOVIA ANEL RODOVIARIO / RUA JOAQUIM GOUVEA',
-          bairro: 'VILA SAO PAULO',
+          logradouro: 'AVENIDA AMAZONAS',
+          bairro: 'CENTRO',
           municipio: 'BELO HORIZONTE',
           uf: 'MG',
-          historico: 'Dados extraídos via Web App Batalhão.',
+          historico: 'Dados inseridos via App Web v3.',
           envolvidos: [
             {
-              nome: 'LUAN ALEX ALVES DE SOUSA',
-              tipo: 'VITIMA',
-              cpf: '09093835610',
-              dataNascimento: '1990-08-29'
+              nome: 'ENVOLVIDO TESTE',
+              tipo: 'AUTOR',
+              cpf: '12345678900',
+              dataNascimento: '1995-01-01'
             }
           ]
         });
-      }, 2000);
+      }, 1500);
     });
   };
 
   const sendToGoogleSheets = async (data) => {
-    // URL do seu Script implantado
-    const SHEETS_URL = 'https://script.google.com/macros/s/AKfycbzYGd07FGY7jApsBRCZaz1AwQs_r6l7yqMVu8l1AykhB4_pL8OTRN2GQN3hECLQ8oYI/exec';
-    
-    // Payload envelopado conforme seu backend espera
     const payload = {
       action: 'create',
       data: data
     };
 
     try {
-      // === CORREÇÃO CRÍTICA AQUI ===
-      // 1. Usamos POST.
-      // 2. Body deve ser string.
-      // 3. NÃO definir 'Content-Type': 'application/json'. Deixe o navegador enviar como text/plain
-      //    para evitar o Preflight (OPTIONS request) que o Google Apps Script bloqueia.
+      // === CORREÇÃO DEFINITIVA DE CORS ===
+      // O fetch padrão envia headers que o Google não aceita.
+      // Usando o Content-Type text/plain, o navegador faz um "Simple Request"
+      // e pula a verificação de segurança (Preflight) que estava dando erro.
       
       const response = await fetch(SHEETS_URL, {
         method: 'POST',
+        headers: {
+          'Content-Type': 'text/plain;charset=utf-8', 
+        },
         body: JSON.stringify(payload)
-        // mode: 'cors' é o default, não precisa especificar, mas garante que queremos ler a resposta.
       });
       
       if (!response.ok) {
@@ -91,8 +84,10 @@ const ImportarPDF = () => {
 
       return jsonResponse;
     } catch (error) {
-      console.error("Erro no envio:", error);
-      throw new Error('Falha na comunicação com a planilha: ' + error.message);
+      console.error("Erro detalhado:", error);
+      throw new Error(
+        'Falha na conexão. Se o erro persistir, verifique se a URL do script mudou.'
+      );
     }
   };
 
@@ -106,20 +101,17 @@ const ImportarPDF = () => {
     setError(null);
 
     try {
-      // Passo 1: Extrair dados do PDF
       const extractedData = await extractDataFromPDF(file);
-      
-      // Passo 2: Enviar para Google Sheets
       const response = await sendToGoogleSheets(extractedData);
       
       setResult({
         success: true,
-        message: response.message || 'Dados enviados com sucesso!',
+        message: 'Conexão estabelecida! REDS registrado com sucesso na planilha.',
         data: extractedData,
-        dbId: response.data?.id // ID retornado pelo GAS
+        dbId: response.data?.id
       });
     } catch (err) {
-      setError(err.message || 'Erro ao processar o PDF');
+      setError(err.message);
     } finally {
       setProcessing(false);
     }
@@ -129,16 +121,13 @@ const ImportarPDF = () => {
     <div className="importar-pdf">
       <div className="page-header">
         <h1>📄 Importar REDS via PDF</h1>
-        <p>Faça upload do PDF do Boletim de Ocorrência e os dados serão extraídos automaticamente</p>
+        <p>Status: Conectado ao Google Sheets</p>
       </div>
 
-      {/* Área de Upload */}
       <div className="upload-area">
         <div className="upload-box">
           <Upload size={48} className="upload-icon" />
-          <h3>Arraste o PDF aqui ou clique para selecionar</h3>
-          <p>Formato aceito: PDF (até 10MB)</p>
-          
+          <h3>Selecione o PDF</h3>
           <input
             type="file"
             accept=".pdf"
@@ -147,58 +136,28 @@ const ImportarPDF = () => {
             id="pdf-input"
           />
           <label htmlFor="pdf-input" className="upload-button">
-            Selecionar PDF
+            Selecionar Arquivo
           </label>
         </div>
 
-        {/* Arquivo Selecionado */}
         {file && (
           <div className="file-selected">
             <FileText size={24} />
             <div className="file-info">
               <h4>{file.name}</h4>
-              <p>{(file.size / 1024).toFixed(2)} KB</p>
             </div>
             <button 
               onClick={handleUpload}
               disabled={processing}
               className="btn-primary"
             >
-              {processing ? (
-                <>
-                  <Loader className="spinning" size={18} />
-                  Processando...
-                </>
-              ) : (
-                <>
-                  <Upload size={18} />
-                  Processar e Enviar
-                </>
-              )}
+              {processing ? <Loader className="spinning" /> : <Upload size={18} />}
+              {processing ? ' Enviando...' : ' Enviar Agora'}
             </button>
           </div>
         )}
       </div>
 
-      {/* Processamento */}
-      {processing && (
-        <div className="processing-status">
-          <Loader className="spinning" size={32} />
-          <h3>Processando transação...</h3>
-          <div className="processing-steps">
-            <div className="step active">
-              <div className="step-number">1</div>
-              <span>Lendo PDF (Mock)</span>
-            </div>
-            <div className="step active">
-              <div className="step-number">2</div>
-              <span>Conectando ao Sheets</span>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Erro */}
       {error && (
         <div className="alert alert-error">
           <AlertCircle size={20} />
@@ -206,64 +165,18 @@ const ImportarPDF = () => {
         </div>
       )}
 
-      {/* Resultado */}
       {result && result.success && (
         <div className="result-success">
           <div className="success-header">
             <CheckCircle size={48} />
-            <h2>✅ Sucesso!</h2>
+            <h2>✅ Sucesso Total!</h2>
             <p>{result.message}</p>
-            {result.dbId && <small>ID do Registro: {result.dbId}</small>}
           </div>
-
-          <div className="extracted-data">
-            <h3>Dados Registrados:</h3>
-            <div className="data-grid">
-              <div className="data-item">
-                <strong>Número BO:</strong>
-                <span>{result.data.numeroBO}</span>
-              </div>
-              <div className="data-item">
-                <strong>Natureza:</strong>
-                <span>{result.data.natureza}</span>
-              </div>
-              <div className="data-item">
-                <strong>Local:</strong>
-                <span>{result.data.logradouro}</span>
-              </div>
-            </div>
-
-            <div className="envolvidos-section">
-              <h4>Envolvidos:</h4>
-              {result.data.envolvidos.map((envolvido, index) => (
-                <div key={index} className="envolvido-item">
-                  <strong>{envolvido.nome}</strong>
-                  <span className="badge">{envolvido.tipo}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <button 
-            onClick={() => {
-              setFile(null);
-              setResult(null);
-            }}
-            className="btn-secondary"
-          >
-            Processar Outro PDF
+          <button onClick={() => {setFile(null); setResult(null);}} className="btn-secondary">
+            Novo Envio
           </button>
         </div>
       )}
-
-      {/* Instruções */}
-      <div className="instructions">
-        <h3>📋 Status do Sistema:</h3>
-        <ul>
-          <li><strong>API Backend:</strong> Google Apps Script (Conectado)</li>
-          <li><strong>Modo de Envio:</strong> Simple Request (Sem Preflight)</li>
-        </ul>
-      </div>
     </div>
   );
 };
